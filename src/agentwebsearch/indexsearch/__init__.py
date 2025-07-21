@@ -1,1 +1,1 @@
-from agentwebsearch.indexsearch.base import IndexType  # noqa
+from agentwebsearch.indexsearch.hnsw import HNSWInMemoryIndexDB  # noqa

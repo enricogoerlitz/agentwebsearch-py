@@ -24,6 +24,14 @@ class HNSWInMemoryIndexDB(BaseInMemoryIndexDB):
 
         self._documents: dict[int, IndexDBDocument] = {}
 
+    def new(self) -> 'HNSWInMemoryIndexDB':
+        return HNSWInMemoryIndexDB(
+            embedding_model=self._embedding_model,
+            space=self._space,
+            ef_construction=self._ef_construction,
+            m=self._m
+        )
+
     def add(self, reference: str, text: str, embedding: np.ndarray) -> None:
         start_id = len(self._documents)
         self._documents[start_id] = IndexDBDocument(

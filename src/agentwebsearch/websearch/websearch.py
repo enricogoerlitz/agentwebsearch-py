@@ -15,8 +15,8 @@ from agentwebsearch.websearch.prompts import PromptGenerator
 from agentwebsearch.webscraper.base import BaseWebScraper, WebPageResult
 from agentwebsearch.webscraper import DefaultWebScraper
 from agentwebsearch.search.client.base import BaseSearchClient
-from agentwebsearch.indexsearch.base import IndexType
-from agentwebsearch.indexsearch.factory import InMemoryIndexDBFactory
+from agentwebsearch.indexsearch.base import BaseInMemoryIndexDB
+from agentwebsearch.indexsearch import HNSWInMemoryIndexDB
 from agentwebsearch.embedding.base import BaseEmbeddingModel
 from agentwebsearch.embedding.utils import chunk_text_with_overlap
 from agentwebsearch.llm.base import BaseChatModel
@@ -29,7 +29,7 @@ class AgentWebSearch:
             llm: BaseChatModel,
             search_client: BaseSearchClient = None,
             scraper: BaseWebScraper = None,
-            index_type: IndexType = None,
+            index_db: BaseInMemoryIndexDB = None,
             chunk_size: int = 800,
             chunk_overlap: int = 200
     ):
@@ -37,9 +37,10 @@ class AgentWebSearch:
         self._embedding_model = embedding_model
         self._search_client = search_client or DefaultSearchClient()
         self._scraper = scraper or DefaultWebScraper()
-        self._index_type = index_type or IndexType.HNSW
+        self._index = index_db or HNSWInMemoryIndexDB(
+            embedding_model=embedding_model
+        )
         self._prompts = PromptGenerator()
-        self._index = None
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
 
@@ -48,10 +49,7 @@ class AgentWebSearch:
             req: WebSearchRequest
     ) -> WebSearchResponse | Iterator[WebSearchResponse]:
         # 1. Initialize response
-        self._index = InMemoryIndexDBFactory.create(
-            type=self._index_type,
-            embedding_model=self._embedding_model
-        )
+        self._index = self._index.new()
         response = WebSearchResponse.empty()
 
         # 2. Generate search queries
@@ -110,7 +108,7 @@ class AgentWebSearch:
 
         return google_queries, vector_queries_args, vector_queries
 
-    def _fetch_google_links(self, queries: list[str], req: WebSearchRequest) -> list[str]:
+    def _fetch_google_links(self, queries: list[str], req: WebSearchRequest) -> list[SearchResult]:
         return self._search_client.search(queries, req.query.search.google.max_result_count)
 
     def _create_init_response_references(

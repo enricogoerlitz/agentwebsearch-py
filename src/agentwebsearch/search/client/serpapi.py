@@ -3,14 +3,15 @@ import requests
 from typing import Iterator
 
 from agentwebsearch.search.client.base import (
-    BaseSearchClient, SearchResult
+    BaseSearchClient,
+    SearchResult,
 )
 
 
-class SearchApiClient(BaseSearchClient):
+class SerpApiClient(BaseSearchClient):
     def __init__(self, api_key: str):
         self._api_key = api_key
-        self._url = "https://www.searchapi.io/api/v1/search"
+        self._url = "https://serpapi.com/search.json"
 
     def search(self, queries: list[str], n: int) -> list[SearchResult]:
         search_links = [

@@ -13,8 +13,9 @@
 ```python
 from agentwebsearch import AgentWebSearch
 from agentwebsearch.websearch.request import WebSearchRequest
-
 from agentwebsearch.search.client import DefaultSearchClient
+from agentwebsearch.webscraper import DefaultWebScraper
+from agentwebsearch.indexsearch import HNSWInMemoryIndexDB
 from agentwebsearch.llm import OpenAIChatModel
 from agentwebsearch.embedding import OpenAIEmbeddingModel
 
@@ -30,10 +31,14 @@ llm = OpenAIChatModel(
     temperature=0.7
 )
 
+index_db = HNSWInMemoryIndexDB(embedding_model=embedding_model)
 search_client = DefaultSearchClient()
+scraper = DefaultWebScraper()
 
 websearch = AgentWebSearch(
     search_client=search_client,
+    index_db=index_db,
+    scraper=scraper,
     llm=llm,
     embedding_model=embedding_model
 )
@@ -65,6 +70,7 @@ for result in websearch.execute(req, stream=True):
 ### Deploy as MCP-Server
 
 ```python
+# server.py
 from agentwebsearch.mcp import WebSearchFastMCP
 
 mcp = WebSearchFastMCP("Demo 🚀")
@@ -86,4 +92,6 @@ if __name__ == "__main__":
         port=8000,
         path="/mcp"
     )
+
+# python run server.py
 ```

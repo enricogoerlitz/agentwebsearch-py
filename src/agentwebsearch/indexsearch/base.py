@@ -1,12 +1,7 @@
 import numpy as np
 
-from enum import Enum
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-
-
-class IndexType(str, Enum):
-    HNSW = "HNSW"
 
 
 @dataclass(frozen=True)
@@ -37,6 +32,9 @@ class IndexDBDocument:
 
 
 class BaseInMemoryIndexDB(ABC):
+    @abstractmethod
+    def new(self) -> 'BaseInMemoryIndexDB': pass
+
     @abstractmethod
     def add(
         self,

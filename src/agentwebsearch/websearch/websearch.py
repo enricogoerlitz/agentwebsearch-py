@@ -46,7 +46,8 @@ class AgentWebSearch:
 
     def execute(
             self,
-            req: WebSearchRequest
+            req: WebSearchRequest,
+            stream: bool = False
     ) -> WebSearchResponse | Iterator[WebSearchResponse]:
         # 1. Initialize response
         self._index = self._index.new()
@@ -63,10 +64,17 @@ class AgentWebSearch:
         search_results = self._fetch_google_links(google_queries, req)
         response.references = self._create_init_response_references(search_results)
 
+        if stream:
+            yield response
+
         # 4. Scrape web pages and perform vector search in parallel
         processes = min(multiprocessing.cpu_count(), len(search_results))
         with ThreadPoolExecutor(max_workers=processes) as pool:
             pages_results, pages_text_chunks, err_urls = self._scrape_web_pages(search_results, response, pool)
+
+            if stream:
+                yield response
+
             self._index_web_pages(pages_results, pages_text_chunks, pool)
             vector_results = self._perform_vector_search(vector_queries_args, pool)
 
@@ -78,9 +86,16 @@ class AgentWebSearch:
         )
         response.error_references = err_urls
 
+        if stream:
+            yield response
+
         # 6. Summarize results if enabled
         if req.response.summarization.enabled:
-            response.summary = self._summarize_results(req, response)
+            if stream:
+                response.summary = self._summarize_results(req, response, stream)
+                yield response
+            else:
+                response.summary = self._summarize_results(req, response, stream)
 
         return response
 
@@ -186,10 +201,18 @@ class AgentWebSearch:
         query, k, as_dict = args
         return self._index.search(query, k=k, as_dict=as_dict)
 
-    def _summarize_results(self, req: WebSearchRequest, resp: WebSearchResponse) -> str:
+    def _summarize_results(
+            self,
+            req: WebSearchRequest,
+            resp: WebSearchResponse,
+            stream: bool
+    ) -> str | Iterator[str]:
         messages = self._prompts.gen_web_search_response_summary_messages(
             req=req,
             resp=resp
         )
-        summary = self._llm.submit(messages)
-        return summary
+        if not stream:
+            summary = self._llm.submit(messages)
+            return summary
+
+        yield from self._llm.submit_stream(messages)

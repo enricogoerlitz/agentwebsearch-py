@@ -1,5 +1,7 @@
 import openai
 
+from typing import Iterator
+
 from agentwebsearch.llm.base import BaseChatModel
 
 
@@ -26,3 +28,16 @@ class OpenAIChatModel(BaseChatModel):
         )
 
         return resp.choices[0].message.content
+
+    def submit_stream(self, messages: list[dict]) -> Iterator[str]:
+        content = ""
+        for chunk in openai.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=self._temperature,
+            stream=True
+        ):
+            if "choices" in chunk and len(chunk["choices"]) > 0:
+                new_content = chunk["choices"][0]["delta"].get("content", "")
+                content += new_content
+                yield new_content

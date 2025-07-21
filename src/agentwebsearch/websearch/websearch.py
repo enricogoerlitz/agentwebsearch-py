@@ -92,8 +92,9 @@ class AgentWebSearch:
         # 6. Summarize results if enabled
         if req.response.summarization.enabled:
             if stream:
-                response.summary = self._summarize_results(req, response, stream)
-                yield response
+                for summary in self._summarize_results(req, response, stream):
+                    response.summary = summary
+                    yield response
             else:
                 response.summary = self._summarize_results(req, response, stream)
 

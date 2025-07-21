@@ -1,4 +1,6 @@
 # AgentWebSearch Package
+[![CI](https://github.com/enricogoerlitz/agentwebsearch-py/actions/workflows/ci.yml/badge.svg)](https://github.com/enricogoerlitz/agentwebsearch-py/actions/workflows/ci.yml)
+[![CD](https://github.com/enricogoerlitz/agentwebsearch-py/actions/workflows/release.yml/badge.svg)](https://github.com/enricogoerlitz/agentwebsearch-py/actions/workflows/release.yml)
 
 ## Description
 
@@ -23,7 +25,7 @@ embedding_model = OpenAIEmbeddingModel(
 )
 
 llm = OpenAIChatModel(
-    model="gpt-4o-mini",
+    model="gpt-4o",
     api_key="YOUR_OPENAI_API_KEY",
     temperature=0.7
 )
@@ -35,8 +37,53 @@ websearch = AgentWebSearch(
     llm=llm,
     embedding_model=embedding_model
 )
+```
+
+### Execute AgentWebSearch
+
+```python
+from agentwebsearch.websearch.request import RequestQuery, RequestQueryMessage
 
 req = WebSearchRequest(
-    ...
+    query=RequestQuery(
+        messages=[
+            RequestQueryMessage(
+                role="user",
+                content="Wann wurde der Bundeskanzler 2025 gewählt?"
+            )
+        ]
+    )
 )
+
+result = websearch.execute(req)
+# or
+for result in websearch.execute(req, stream=True):
+    print(result)
+    yield result
+```
+
+### Deploy as MCP-Server
+
+```python
+from agentwebsearch.mcp import WebSearchFastMCP
+
+mcp = WebSearchFastMCP("Demo 🚀")
+
+
+@mcp.tool
+def other_tool():
+    return "Other tool"
+
+
+if __name__ == "__main__":
+    # available tools:
+    #   - websearch
+    #   - other_tool
+
+    mcp.run(
+        transport="streamable-http",
+        host="127.0.0.1",
+        port=8000,
+        path="/mcp"
+    )
 ```

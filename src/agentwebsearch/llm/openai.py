@@ -15,6 +15,9 @@ class OpenAIChatModel(BaseChatModel):
         self._temperature = temperature
         openai.api_key = api_key
 
+    def model_name(self):
+        return self._model
+
     def submit(self, messages: list[dict]) -> str:
         resp = openai.chat.completions.create(
             model=self._model,

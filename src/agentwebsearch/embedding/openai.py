@@ -10,6 +10,9 @@ class OpenAIEmbeddingModel(BaseEmbeddingModel):
         self._model = model
         openai.api_key = api_key
 
+    def model_name(self):
+        return self._model
+
     def embed(self, text: str) -> list[float]:
         embedding = self.embed_batch([text])
 

@@ -35,7 +35,7 @@ class RequestQuerySearch(BaseModel):
 
 
 class RequestQuery(BaseModel):
-    messages: List[dict]
+    messages: List[RequestQueryMessage]
     search: RequestQuerySearch = Field(default_factory=RequestQuerySearch)
 
 

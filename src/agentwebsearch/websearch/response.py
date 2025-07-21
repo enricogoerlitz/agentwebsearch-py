@@ -10,6 +10,8 @@ class ResponseSearch:
 @dataclass(frozen=False)
 class ResponseReference:
     url: str
+    title: str
+    description: str
     document_links: list[str]
 
 

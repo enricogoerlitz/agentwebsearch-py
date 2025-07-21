@@ -1,34 +1,19 @@
 import tiktoken
 
-from langchain.text_splitter import TokenTextSplitter
-
 
 def chunk_text_with_overlap(
         text: str,
         chunk_size: int = 800,
         chunk_overlap: int = 200,
-) -> list[str]:
-    splitter = TokenTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap
-    )
-    chunks = splitter.split_text(text)
-    return chunks
-
-
-def chunk_text_with_overlap__DEPR(
-        text: str,
-        base_chunk_size: int = 800,
-        overlap_chunk_size: int = 200,
         model_name: str = "text-embedding-3-large"
 ) -> list[str]:
     enc = tiktoken.encoding_for_model(model_name)
     tokens = enc.encode(text)
     token_count = len(tokens)
 
-    chunk_size = base_chunk_size
-    overlap_prev = overlap_chunk_size
-    overlap_next = overlap_chunk_size
+    chunk_size = chunk_size
+    overlap_prev = chunk_overlap
+    overlap_next = chunk_overlap
 
     chunks = []
     start = 0

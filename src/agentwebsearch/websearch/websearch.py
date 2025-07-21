@@ -9,28 +9,39 @@ from agentwebsearch.websearch.response import (
     ResponseSearch,
     ResponseReference
 )
-from agentwebsearch.webscraper.base import WebPageResult
+from agentwebsearch.search.client import DefaultSearchClient, SearchResult
+from agentwebsearch.websearch.dto import LLMQuestionQueries
+from agentwebsearch.websearch.prompts import PromptGenerator
+from agentwebsearch.webscraper.base import BaseWebScraper, WebPageResult
+from agentwebsearch.webscraper import DefaultWebScraper
 from agentwebsearch.search.client.base import BaseSearchClient
 from agentwebsearch.indexsearch.base import IndexType
 from agentwebsearch.indexsearch.factory import InMemoryIndexDBFactory
-
 from agentwebsearch.embedding.base import BaseEmbeddingModel
+from agentwebsearch.embedding.utils import chunk_text_with_overlap
 from agentwebsearch.llm.base import BaseChatModel
 
 
 class AgentWebSearch:
     def __init__(
             self,
-            search_client: BaseSearchClient,
-            index_type: IndexType,
             embedding_model: BaseEmbeddingModel,
-            llm: BaseChatModel
+            llm: BaseChatModel,
+            search_client: BaseSearchClient = None,
+            scraper: BaseWebScraper = None,
+            index_type: IndexType = None,
+            chunk_size: int = 800,
+            chunk_overlap: int = 200
     ):
-        self._search_client = search_client
-        self._embedding_model = embedding_model
         self._llm = llm
-        self._index_type = index_type
+        self._embedding_model = embedding_model
+        self._search_client = search_client or DefaultSearchClient()
+        self._scraper = scraper or DefaultWebScraper()
+        self._index_type = index_type or IndexType.HNSW
+        self._prompts = PromptGenerator()
         self._index = None
+        self._chunk_size = chunk_size
+        self._chunk_overlap = chunk_overlap
 
     def execute(
             self,
@@ -51,19 +62,22 @@ class AgentWebSearch:
         google_queries, vector_queries_args, vector_queries = queries
 
         # 3. Perform Google search
-        search_links = self._fetch_google_links(google_queries, req)
-        response.references = self._create_init_response_references(search_links)
+        search_results = self._fetch_google_links(google_queries, req)
+        response.references = self._create_init_response_references(search_results)
 
         # 4. Scrape web pages and perform vector search in parallel
-        processes = min(multiprocessing.cpu_count(), len(search_links))
+        processes = min(multiprocessing.cpu_count(), len(search_results))
         with ThreadPoolExecutor(max_workers=processes) as pool:
-            pages_results, pages_text_chunks, err_urls = self._scrape_web_pages(search_links, response, pool)
+            pages_results, pages_text_chunks, err_urls = self._scrape_web_pages(search_results, response, pool)
             self._index_web_pages(pages_results, pages_text_chunks, pool)
             vector_results = self._perform_vector_search(vector_queries_args, pool)
 
         # 5. Prepare response
         response.results = vector_results
-        response.search = ResponseSearch(google=google_queries, vector=vector_queries)
+        response.search = ResponseSearch(
+            google=google_queries,
+            vector=vector_queries
+        )
         response.error_references = err_urls
 
         # 6. Summarize results if enabled
@@ -75,7 +89,7 @@ class AgentWebSearch:
     def _generate_google_and_vector_search_queries(
         self, req: WebSearchRequest
     ) -> tuple[list[str], list[tuple[str, int, bool]], list[str]] | None:
-        messages = gen_search_queries_messages(
+        messages = self._prompts.gen_search_queries_messages(
             chat_messages=req.query.messages,
             prompt_context=req.query.search.prompt_context
         )
@@ -97,18 +111,30 @@ class AgentWebSearch:
         return google_queries, vector_queries_args, vector_queries
 
     def _fetch_google_links(self, queries: list[str], req: WebSearchRequest) -> list[str]:
-        return google.search(queries, req.query.search.google.max_result_count)
+        return self._search_client.search(queries, req.query.search.google.max_result_count)
 
-    def _create_init_response_references(self, links: list[str]) -> dict[str, ResponseReference]:
-        return {link: ResponseReference(url=link, document_links=[]) for link in links}
+    def _create_init_response_references(
+            self,
+            search_results: list[SearchResult]
+    ) -> dict[str, ResponseReference]:
+        return {
+            search_result.url: ResponseReference(
+                url=search_result.url,
+                title=search_result.title,
+                description=search_result.description,
+                document_links=[]
+            )
+            for search_result in search_results
+        }
 
     def _scrape_web_pages(
         self,
-        links: list[str],
+        search_results: list[SearchResult],
         response: WebSearchResponse,
         pool: ThreadPoolExecutor
     ) -> tuple[list[WebPageResult], list[list[str]], list[str]]:
-        scraped_pages: list[WebPageResult] = list(pool.map(webscraper.scrape, links))
+        urls = [result.url for result in search_results]
+        scraped_pages: list[WebPageResult] = list(pool.map(self._scraper.scrape, urls))
         pages_results, pages_text_chunks, err_urls = self._prepare_page_results(scraped_pages)
 
         for page_result in pages_results:
@@ -123,7 +149,7 @@ class AgentWebSearch:
         pages_text_chunks: list[list[str]],
         pool: ThreadPoolExecutor
     ):
-        pages_embeddings = list(pool.map(embedding_model.embed_batch, pages_text_chunks))
+        pages_embeddings = list(pool.map(self._embedding_model.embed_batch, pages_text_chunks))
 
         for page, chunks, embeddings in zip(pages_results, pages_text_chunks, pages_embeddings):
             self._index.add_batch(reference=page.url, texts=chunks, embeddings=embeddings)
@@ -139,7 +165,12 @@ class AgentWebSearch:
         for page in page_results:
             if page.content is not None:
                 prep_results.append(page)
-                page_chunks = aiutils.chunk_text_with_overlap(page.content)
+                page_chunks = chunk_text_with_overlap(
+                    text=page.content,
+                    chunk_size=self._chunk_size,
+                    chunk_overlap=self._chunk_overlap,
+                    model_name=self._embedding_model.model_name()
+                )
                 pages_text_chunks.append(page_chunks)
             else:
                 err_urls.append(page.url)
@@ -158,6 +189,9 @@ class AgentWebSearch:
         return self._index.search(query, k=k, as_dict=as_dict)
 
     def _summarize_results(self, req: WebSearchRequest, resp: WebSearchResponse) -> str:
-        messages = gen_web_search_response_summary(req=req, resp=resp)
+        messages = self._prompts.gen_web_search_response_summary_messages(
+            req=req,
+            resp=resp
+        )
         summary = self._llm.submit(messages)
         return summary

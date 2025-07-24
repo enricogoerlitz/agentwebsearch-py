@@ -7,21 +7,21 @@ class RequestQueryMessage(BaseModel):
     content: str
 
 
-class RequestWebDocumentSearch(BaseModel):
-    enabled: bool = False
-    max_documents: int = 5
-    max_document_mb_size: int = 1 * 1024 * 1024  # 1 MB
+# class RequestWebDocumentSearch(BaseModel):
+#     enabled: bool = False
+#     max_documents: int = 5
+#     max_document_mb_size: int = 1 * 1024 * 1024  # 1 MB
 
-    def __post_init__(self):
-        if self.max_documents < 1:
-            raise ValueError("Max documents must be greater than 0.")
-        if self.max_document_mb_size < 1:
-            raise ValueError("Max document size must be greater than 0.")
+#     def __post_init__(self):
+#         if self.max_documents < 1:
+#             raise ValueError("Max documents must be greater than 0.")
+#         if self.max_document_mb_size < 1:
+#             raise ValueError("Max document size must be greater than 0.")
 
 
 class RequestQueryGoogleSearch(BaseModel):
     max_result_count: int = 5
-    web_document_search: RequestWebDocumentSearch = Field(default_factory=RequestWebDocumentSearch)
+    # web_document_search: RequestWebDocumentSearch = Field(default_factory=RequestWebDocumentSearch)
 
 
 class RequestQueryVectorSearch(BaseModel):

@@ -14,6 +14,7 @@ class WebSearchFastAPI(FastAPI):
             **fastapi_kwargs
     ):
         super().__init__(**fastapi_kwargs)
+        self._route_prefix = route_prefix
         self._websearch = websearch
         self.post(
             path=route_prefix,

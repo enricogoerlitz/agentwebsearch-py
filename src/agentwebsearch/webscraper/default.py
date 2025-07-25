@@ -2,7 +2,7 @@ import requests
 
 from bs4 import BeautifulSoup
 from agentwebsearch.webscraper.base import BaseWebScraper, WebPageResult
-from agentwebsearch.webscraper import wsutils
+from agentwebsearch.webscraper import utils
 from agentwebsearch.logger import logger
 
 
@@ -27,7 +27,7 @@ class DefaultWebScraper(BaseWebScraper):
     def _prepare_page_result(self, url: str, soup: BeautifulSoup) -> WebPageResult:
         a_tags = [a_tag for a_tag in soup.find_all("a", href=True)]
         links, doc_links = self._extract_links(url, a_tags)
-        text = wsutils.compress_soup_text(soup)
+        text = utils.compress_soup_text(soup)
 
         return WebPageResult(
             url=url,
@@ -37,7 +37,7 @@ class DefaultWebScraper(BaseWebScraper):
         )
 
     def _extract_links(self, url: str, a_tags: list[dict]) -> tuple[list[str], list[str]]:
-        host_url = wsutils.get_host_url(url)
+        host_url = utils.get_host_url(url)
 
         doc_links = []
         links = []

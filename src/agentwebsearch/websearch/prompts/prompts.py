@@ -21,7 +21,8 @@ class PromptGenerator:
         path = self._full_path(file)
         return self._read_md_file(path)
 
-    def _full_path(self, relativ_path: str) -> str:
+    def _full_path(self, file_name: str) -> str:
+        relativ_path = f"markdown/{file_name}"
         base_dir = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base_dir, relativ_path)
 

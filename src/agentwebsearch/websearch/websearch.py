@@ -20,6 +20,7 @@ from agentwebsearch.indexsearch import HNSWInMemoryIndexDB
 from agentwebsearch.embedding.base import BaseEmbeddingModel
 from agentwebsearch.embedding.utils import chunk_text_with_overlap
 from agentwebsearch.llm.base import BaseChatModel
+from agentwebsearch.logger import logger
 
 
 class AgentWebSearch:
@@ -126,28 +127,40 @@ class AgentWebSearch:
         yield response
 
     def _generate_google_and_vector_search_queries(
-        self, req: WebSearchRequest
+        self,
+        req: WebSearchRequest,
+        max_retry: int = 1,
+        retry_count: int = 0
     ) -> tuple[list[str], list[tuple[str, int, bool]], list[str]] | None:
-        messages = self._prompts.gen_search_queries_messages(
-            chat_messages=req.query.messages,
-            prompt_context=req.query.search.prompt_context
-        )
+        try:
+            messages = self._prompts.gen_search_queries_messages(
+                chat_messages=req.query.messages,
+                prompt_context=req.query.search.prompt_context
+            )
 
-        queries_raw = self._llm.submit(messages)
-        queries = LLMQuestionQueries.from_lmm_response(queries_raw)
+            queries_raw = self._llm.submit(messages)
+            queries = LLMQuestionQueries.from_lmm_response(queries_raw)
 
-        if not queries.has_queries():
-            return None
+            if not queries.has_queries():
+                return None
 
-        google_queries = queries.google_search_queries
-        vector_queries = queries.vector_search_queries
+            google_queries = queries.google_search_queries
+            vector_queries = queries.vector_search_queries
 
-        vector_queries_args = [
-            (query, req.query.search.vector.result_count, True)
-            for query in vector_queries
-        ]
+            vector_queries_args = [
+                (query, req.query.search.vector.result_count, True)
+                for query in vector_queries
+            ]
 
-        return google_queries, vector_queries_args, vector_queries
+            return google_queries, vector_queries_args, vector_queries
+        except Exception as e:
+            if retry_count < max_retry:
+                retry_count += 1
+                logger.warning(
+                    f"Failed to generate search queries: {e}. Retrying ({retry_count}/{max_retry})..."
+                )
+                return self._generate_google_and_vector_search_queries(req, max_retry, retry_count)
+            raise e
 
     def _fetch_google_links(self, queries: list[str], req: WebSearchRequest) -> list[SearchResult]:
         return self._search_client.search(queries, req.query.search.google.max_result_count)

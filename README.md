@@ -4,7 +4,21 @@
 
 ## Description
 
-...
+**AgentWebSearch** is a modular Python package designed to perform web searches and extract only semantically relevant information for efficient use in LLM contexts (e.g. RAG pipelines or autonomous agents).
+
+It combines keyword-based and vector-based search strategies to return concise, high-relevance results while minimizing token overhead. A given input (e.g. a user query or message history) is processed via an LLM to extract one or more search questions. These are then used to perform both:
+
+- **Web search** (via Google Search or pluggable APIs like SerpAPI or SearchAPI)
+- **Vector search** (on a temporary in-memory HNSW index using `hnswlib`)
+
+Fetched pages are scraped (via `requests`), chunked, embedded, and stored in an in-memory vector index. This allows for efficient semantic filtering of irrelevant content before assembling the final result set.
+
+The package supports full customization:
+- Replace or extend components like `SearchClient`, `WebScraper`, or `EmbeddingModel`
+- Plug in your own LLM or embedding backends
+- Deploy via **REST API** (FastAPI) or as a **Modular Command Protocol (MCP)** agent
+
+Use cases include tools for LLM agents, chat systems with real-time web context, or any pipeline that benefits from semantically filtered live search results.
 
 ## Quickstart
 
@@ -71,9 +85,15 @@ for result in websearch.execute(req, stream=True):
 
 ```python
 # server.py
+from agentwebsearch import AgentWebSearch
 from agentwebsearch.mcp import WebSearchFastMCP
 
-mcp = WebSearchFastMCP("Demo 🚀")
+
+websearch = AgentWebSearch(...)
+mcp = WebSearchFastMCP(
+    websearch=websearch,
+    name="Demo 🚀"
+)
 
 
 @mcp.tool
@@ -94,4 +114,26 @@ if __name__ == "__main__":
     )
 
 # python run server.py
+```
+
+### Deploy as REST-API
+
+
+```python
+# server.py
+from agentwebsearch import AgentWebSearch
+from agentwebsearch.rest import WebSearchFastAPI
+
+websearch = AgentWebSearch(...)
+app = WebSearchFastAPI(
+    websearch=websearch,
+    name="Demo 🚀"
+)
+
+@app.get("/other-route")
+def other_route():
+    return {"message": "Other route"}
+
+
+# uvicorn agentwebsearch.rest.example:app --reload --app-dir src
 ```

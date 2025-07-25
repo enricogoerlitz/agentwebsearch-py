@@ -1,7 +1,7 @@
 import multiprocessing
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Iterator
+from typing import Iterator, AsyncGenerator
 
 from agentwebsearch.websearch.request import WebSearchRequest
 from agentwebsearch.websearch.response import (
@@ -44,11 +44,26 @@ class AgentWebSearch:
         self._chunk_size = chunk_size
         self._chunk_overlap = chunk_overlap
 
-    def execute(
+    async def execute(
+            self,
+            req: WebSearchRequest
+    ) -> WebSearchResponse:
+        async for result in self._execute(req):
+            final = result
+        return final
+
+    async def execute_stream(
+            self,
+            req: WebSearchRequest
+    ) -> AsyncGenerator[WebSearchResponse, None]:
+        async for result in self._execute(req, stream=True):
+            yield result
+
+    async def _execute(
             self,
             req: WebSearchRequest,
             stream: bool = False
-    ) -> WebSearchResponse | Iterator[WebSearchResponse]:
+    ) -> AsyncGenerator[bytes, None]:
         # 1. Initialize response
         self._index = self._index.new()
         response = WebSearchResponse.empty()
@@ -56,16 +71,27 @@ class AgentWebSearch:
         # 2. Generate search queries
         queries = self._generate_google_and_vector_search_queries(req)
         if queries is None:
-            return response
+            if stream:
+                yield response.to_yield()
+                return
+            yield response
+            return
 
         google_queries, vector_queries_args, vector_queries = queries
+        response.search = ResponseSearch(
+            google=google_queries,
+            vector=vector_queries
+        )
+
+        if stream:
+            yield response.to_yield()
 
         # 3. Perform Google search
         search_results = self._fetch_google_links(google_queries, req)
         response.references = self._create_init_response_references(search_results)
 
         if stream:
-            yield response
+            yield response.to_yield()
 
         # 4. Scrape web pages and perform vector search in parallel
         processes = min(multiprocessing.cpu_count(), len(search_results))
@@ -73,32 +99,31 @@ class AgentWebSearch:
             pages_results, pages_text_chunks, err_urls = self._scrape_web_pages(search_results, response, pool)
 
             if stream:
-                yield response
+                yield response.to_yield()
 
             self._index_web_pages(pages_results, pages_text_chunks, pool)
             vector_results = self._perform_vector_search(vector_queries_args, pool)
 
         # 5. Prepare response
         response.results = vector_results
-        response.search = ResponseSearch(
-            google=google_queries,
-            vector=vector_queries
-        )
         response.error_references = err_urls
 
         if stream:
-            yield response
+            yield response.to_yield()
 
         # 6. Summarize results if enabled
         if req.response.summarization.enabled:
             if stream:
                 for summary in self._summarize_results(req, response, stream):
                     response.summary = summary
-                    yield response
+                    yield response.to_yield()
             else:
                 response.summary = self._summarize_results(req, response, stream)
 
-        return response
+        if stream:
+            yield response.to_yield()
+            return
+        yield response
 
     def _generate_google_and_vector_search_queries(
         self, req: WebSearchRequest
@@ -154,6 +179,7 @@ class AgentWebSearch:
         for page_result in pages_results:
             ref = response.references[page_result.url]
             ref.document_links = page_result.document_links
+            ref.finished = True
 
         return pages_results, pages_text_chunks, err_urls
 

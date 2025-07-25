@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+import json
+
+from dataclasses import dataclass, asdict
 
 
 @dataclass(frozen=True)
@@ -13,6 +15,7 @@ class ResponseReference:
     title: str
     description: str
     document_links: list[str]
+    finished: bool = False
 
 
 @dataclass(frozen=False)
@@ -32,3 +35,9 @@ class WebSearchResponse:
             results=[],
             summary=None,
         )
+
+    def to_yield(self) -> bytes:
+        return (json.dumps(self.to_dict()) + "\n")
+
+    def to_dict(self) -> dict:
+        return asdict(self)

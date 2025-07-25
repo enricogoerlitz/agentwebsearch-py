@@ -50,6 +50,7 @@ class RequestResponseSummarization(BaseModel):
 
 
 class RequestResponse(BaseModel):
+    stream: bool = False
     summarization: RequestResponseSummarization = Field(default_factory=RequestResponseSummarization)
 
 

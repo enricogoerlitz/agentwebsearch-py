@@ -4,6 +4,7 @@ from agentwebsearch.mcp import WebSearchFastMCP
 mcp = WebSearchFastMCP("Demo 🚀")
 
 
+# python src/agentwebsearch/mcp/example.py
 if __name__ == "__main__":
     mcp.run(
         transport="streamable-http",
